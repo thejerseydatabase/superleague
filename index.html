@@ -60,6 +60,26 @@
   }
   .filters select:focus, .h2h-row select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(232,184,75,0.15);}
   .vs-sep{font-family:'Anton',sans-serif;color:var(--text-dim);font-size:16px;}
+  /* Jersey filter: a checkbox dropdown instead of a plain select, so
+     someone tracking (say) every Alternate a team's worn doesn't have to
+     re-run the filter once per jersey name - matches the same visual
+     footprint as the other filter dropdowns it sits next to. */
+  .multi-select{position:relative;}
+  .multi-select-btn{
+    background:var(--surface);border:1px solid var(--line);color:var(--text);
+    font-family:'Inter',sans-serif;font-size:13.5px;padding:10px 12px;border-radius:8px;outline:none;width:100%;
+    text-align:left;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  }
+  .multi-select-btn:focus, .multi-select-btn[aria-expanded="true"]{border-color:var(--accent);box-shadow:0 0 0 3px rgba(232,184,75,0.15);}
+  .multi-select-panel{
+    position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:20;max-height:260px;overflow-y:auto;
+    background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:6px;
+    box-shadow:0 8px 24px rgba(0,0,0,0.25);
+  }
+  .multi-select-option{display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:6px;font-size:13px;cursor:pointer;}
+  .multi-select-option:hover{background:var(--surface-2);}
+  .multi-select-option input{accent-color:var(--accent);width:14px;height:14px;cursor:pointer;flex-shrink:0;}
+  .multi-select-empty{padding:8px;font-size:12.5px;color:var(--text-dim2);}
   .clear-row{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:20px;}
   .clear-row button{background:none;border:none;color:var(--text-dim);font-family:'IBM Plex Mono',monospace;font-size:11.5px;text-decoration:underline;cursor:pointer;padding:4px;}
   .clear-row button:hover{color:var(--accent);}
@@ -180,7 +200,10 @@
       <option value="all">All</option>
     </select>
     <select id="f-year" aria-label="Year"><option value="">Any year</option></select>
-    <select id="f-jersey" aria-label="Jersey"><option value="">Any jersey</option></select>
+    <div class="multi-select" id="f-jersey-wrap">
+      <button type="button" class="multi-select-btn" id="f-jersey-btn" aria-haspopup="listbox" aria-expanded="false">Any jersey</button>
+      <div class="multi-select-panel" id="f-jersey-panel" hidden></div>
+    </div>
     <select id="f-round" aria-label="Round"><option value="">Any round</option></select>
     <select id="f-theme" aria-label="Match theme"><option value="">Any theme</option></select>
     <select id="f-stadium" aria-label="Stadium"><option value="">Any stadium</option></select>
@@ -366,7 +389,12 @@ const h2hFiltersEl = document.getElementById('h2h-filters');
 const fTeam = document.getElementById('f-team');
 const fStatus = document.getElementById('f-status');
 const fYear = document.getElementById('f-year');
-const fJersey = document.getElementById('f-jersey');
+const fJerseyBtn = document.getElementById('f-jersey-btn');
+const fJerseyPanel = document.getElementById('f-jersey-panel');
+// Multiple jersey names can be checked at once (e.g. every "Alternate ..."
+// a team's released in a season) rather than one at a time - selectedJerseys
+// is the actual filter state; the button/panel are just its UI.
+let selectedJerseys = new Set();
 const fRound = document.getElementById('f-round');
 const fTheme = document.getElementById('f-theme');
 const fStadium = document.getElementById('f-stadium');
@@ -441,14 +469,53 @@ function fillSelect(sel, values, placeholder){
 // the opponent wore that game - otherwise "Canberra + Indigenous" would include games where
 // Canberra wore something else but the other team happened to wear an Indigenous jersey.
 function matchesJerseyFilter(m){
-  if(!fJersey.value) return true;
+  if(!selectedJerseys.size) return true;
   if(fTeam.value){
     if(m.home !== fTeam.value && m.away !== fTeam.value) return false;
     const teamJersey = m.home === fTeam.value ? m.homeJersey : m.awayJersey;
-    return teamJersey === fJersey.value;
+    return selectedJerseys.has(teamJersey);
   }
-  return m.homeJersey === fJersey.value || m.awayJersey === fJersey.value;
+  return selectedJerseys.has(m.homeJersey) || selectedJerseys.has(m.awayJersey);
 }
+function updateJerseyBtnLabel(){
+  if(selectedJerseys.size === 0) fJerseyBtn.textContent = 'Any jersey';
+  else if(selectedJerseys.size === 1) fJerseyBtn.textContent = [...selectedJerseys][0];
+  else fJerseyBtn.textContent = selectedJerseys.size + ' jerseys selected';
+}
+// Rebuilt every time populateFacets() runs (same cross-filtering pattern as
+// every other dropdown here) - values no longer in scope get dropped from
+// the selection rather than left checked against options that don't exist.
+function fillJerseyOptions(values){
+  selectedJerseys = new Set([...selectedJerseys].filter(v => values.includes(v)));
+  fJerseyPanel.innerHTML = values.length
+    ? values.map(v => `
+        <label class="multi-select-option">
+          <input type="checkbox" value="${v}" ${selectedJerseys.has(v) ? 'checked' : ''}>
+          <span>${v}</span>
+        </label>`).join('')
+    : '<div class="multi-select-empty">No jerseys match the current filters</div>';
+  updateJerseyBtnLabel();
+}
+fJerseyPanel.addEventListener('change', e => {
+  if(e.target.tagName !== 'INPUT') return;
+  if(e.target.checked) selectedJerseys.add(e.target.value);
+  else selectedJerseys.delete(e.target.value);
+  updateJerseyBtnLabel();
+  populateFacets();
+  applyFilters();
+});
+fJerseyBtn.addEventListener('click', e => {
+  e.stopPropagation();
+  const isOpen = !fJerseyPanel.hidden;
+  fJerseyPanel.hidden = isOpen;
+  fJerseyBtn.setAttribute('aria-expanded', String(!isOpen));
+});
+document.addEventListener('click', e => {
+  if(!fJerseyPanel.hidden && !document.getElementById('f-jersey-wrap').contains(e.target)){
+    fJerseyPanel.hidden = true;
+    fJerseyBtn.setAttribute('aria-expanded', 'false');
+  }
+});
 // Cross-filtering: each facet's own options are built from matches that satisfy every
 // OTHER active filter (so picking a team only leaves jerseys/years/etc it actually has).
 function facetPredicate(excludeKey){
@@ -477,7 +544,7 @@ function populateFacets(){
     if(jerseyTeam) return [m.home === jerseyTeam ? m.homeJersey : null, m.away === jerseyTeam ? m.awayJersey : null];
     return [m.homeJersey, m.awayJersey];
   }).filter(Boolean))].sort();
-  fillSelect(fJersey, jerseys, 'Any jersey');
+  fillJerseyOptions(jerseys);
 
   fillSelect(fRound, uniqueSorted(MATCHES.filter(facetPredicate('round')), m => m.round), 'Any round');
   fillSelect(fTheme, uniqueSorted(MATCHES.filter(facetPredicate('theme')), m => m.theme), 'Any theme');
@@ -520,7 +587,7 @@ function applyFilters(){
     rows = MATCHES.filter(m => (m.home === a && m.away === b) || (m.home === b && m.away === a));
     // secondary filters still apply on top of the head-to-head pairing
     rows = rows.filter(m => {
-      if(fJersey.value && m.homeJersey !== fJersey.value && m.awayJersey !== fJersey.value) return false;
+      if(selectedJerseys.size && !selectedJerseys.has(m.homeJersey) && !selectedJerseys.has(m.awayJersey)) return false;
       if(fYear.value && String(m.year) !== fYear.value) return false;
       if(fStadium.value && m.stadium !== fStadium.value) return false;
       if(fTheme.value && m.theme !== fTheme.value) return false;
@@ -556,13 +623,14 @@ function setMode(m){
 modeBrowseBtn.addEventListener('click', () => setMode('browse'));
 modeH2hBtn.addEventListener('click', () => setMode('h2h'));
 
-[fTeam, fYear, fJersey, fRound, fTheme, fStadium, fRef].forEach(el =>
+[fTeam, fYear, fRound, fTheme, fStadium, fRef].forEach(el =>
   el.addEventListener('change', () => { populateFacets(); applyFilters(); })
 );
 [fTeamA, fTeamB].forEach(el => el.addEventListener('change', applyFilters));
 
 clearBtn.addEventListener('click', () => {
-  [fTeam, fYear, fJersey, fRound, fTheme, fStadium, fRef].forEach(el => el.value = '');
+  [fTeam, fYear, fRound, fTheme, fStadium, fRef].forEach(el => el.value = '');
+  selectedJerseys.clear();
   populateFacets();
   setDefaultStatus();
   applyFilters();
