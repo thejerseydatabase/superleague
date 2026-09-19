@@ -80,6 +80,14 @@
   .multi-select-option:hover{background:var(--surface-2);}
   .multi-select-option input{accent-color:var(--accent);width:14px;height:14px;cursor:pointer;flex-shrink:0;}
   .multi-select-empty{padding:8px;font-size:12.5px;color:var(--text-dim2);}
+  .multi-select-header{
+    display:flex;align-items:center;justify-content:space-between;gap:8px;
+    padding:4px 8px 8px;margin-bottom:4px;border-bottom:1px solid var(--line);
+    font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.04em;
+    color:var(--text-dim2);text-transform:uppercase;
+  }
+  .multi-select-clear{background:none;border:none;color:var(--text-dim);font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:.04em;text-decoration:underline;cursor:pointer;padding:0;flex-shrink:0;}
+  .multi-select-clear:hover{color:var(--accent);}
   .clear-row{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:20px;}
   .clear-row button{background:none;border:none;color:var(--text-dim);font-family:'IBM Plex Mono',monospace;font-size:11.5px;text-decoration:underline;cursor:pointer;padding:4px;}
   .clear-row button:hover{color:var(--accent);}
@@ -482,13 +490,27 @@ function updateJerseyBtnLabel(){
   else if(selectedJerseys.size === 1) fJerseyBtn.textContent = [...selectedJerseys][0];
   else fJerseyBtn.textContent = selectedJerseys.size + ' jerseys selected';
 }
+// These five get pulled to the top (in this order) whenever they're
+// actually present in the data - most people filter by one of these far
+// more often than a team's one-off named release, and a comp that
+// doesn't have (say) an Indigenous jersey just never surfaces that
+// option at all, so nothing needs to be sport-specific here.
+const JERSEY_PRIORITY = ['Home','Away','Alternate','Indigenous','Heritage'];
+function sortJerseyNames(values){
+  return [...values].sort((a,b) => {
+    const ia = JERSEY_PRIORITY.indexOf(a), ib = JERSEY_PRIORITY.indexOf(b);
+    if(ia !== -1 || ib !== -1) return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+    return a.localeCompare(b, undefined, {numeric:true, sensitivity:'base'});
+  });
+}
 // Rebuilt every time populateFacets() runs (same cross-filtering pattern as
 // every other dropdown here) - values no longer in scope get dropped from
 // the selection rather than left checked against options that don't exist.
 function fillJerseyOptions(values){
   selectedJerseys = new Set([...selectedJerseys].filter(v => values.includes(v)));
   fJerseyPanel.innerHTML = values.length
-    ? values.map(v => `
+    ? `<div class="multi-select-header"><span>Select multiple &mdash; matches any checked</span><button type="button" class="multi-select-clear" id="f-jersey-clear">None</button></div>` +
+      values.map(v => `
         <label class="multi-select-option">
           <input type="checkbox" value="${v}" ${selectedJerseys.has(v) ? 'checked' : ''}>
           <span>${v}</span>
@@ -501,6 +523,12 @@ fJerseyPanel.addEventListener('change', e => {
   if(e.target.checked) selectedJerseys.add(e.target.value);
   else selectedJerseys.delete(e.target.value);
   updateJerseyBtnLabel();
+  populateFacets();
+  applyFilters();
+});
+fJerseyPanel.addEventListener('click', e => {
+  if(e.target.id !== 'f-jersey-clear') return;
+  selectedJerseys.clear();
   populateFacets();
   applyFilters();
 });
@@ -543,8 +571,8 @@ function populateFacets(){
   const jerseys = [...new Set(jerseyScope.flatMap(m => {
     if(jerseyTeam) return [m.home === jerseyTeam ? m.homeJersey : null, m.away === jerseyTeam ? m.awayJersey : null];
     return [m.homeJersey, m.awayJersey];
-  }).filter(Boolean))].sort();
-  fillJerseyOptions(jerseys);
+  }).filter(Boolean))];
+  fillJerseyOptions(sortJerseyNames(jerseys));
 
   fillSelect(fRound, uniqueSorted(MATCHES.filter(facetPredicate('round')), m => m.round), 'Any round');
   fillSelect(fTheme, uniqueSorted(MATCHES.filter(facetPredicate('theme')), m => m.theme), 'Any theme');
