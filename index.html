@@ -234,7 +234,7 @@
 
   <section class="jersey-stats" id="ladder-box">
     <button class="stats-toggle" id="ladder-toggle" aria-expanded="false">
-      <span>Jersey ladder</span><i class="ti ti-chevron-down"></i>
+      <span>Jersey Ladder — All Teams</span><i class="ti ti-chevron-down"></i>
     </button>
     <div class="stats-body" id="ladder-body" hidden>
       <div class="filters" style="grid-template-columns:200px;margin-bottom:14px;">
@@ -811,6 +811,8 @@ function renderJerseyLadder(){
 }
 
 function renderJerseyStats(){
+  const prevStatsBody = document.getElementById('stats-body');
+  const statsWasOpen = !!(prevStatsBody && !prevStatsBody.hidden);
   const team = mode === 'browse' ? fTeam.value : null;
   if(!team){ statsEl.hidden = true; statsEl.innerHTML = ''; return; }
 
@@ -848,10 +850,10 @@ function renderJerseyStats(){
   }
 
   statsEl.innerHTML = `
-    <button class="stats-toggle" id="stats-toggle" aria-expanded="false">
+    <button class="stats-toggle" id="stats-toggle" aria-expanded="${statsWasOpen}">
       <span>${team} \u2014 jersey breakdown${fYear.value ? ' (' + fYear.value + ')' : ''}</span><i class="ti ti-chevron-down"></i>
     </button>
-    <div class="stats-body" id="stats-body" hidden>
+    <div class="stats-body" id="stats-body" ${statsWasOpen ? '' : 'hidden'}>
       <table>
         <thead><tr><th>Jersey</th><th>GP</th><th>W</th><th>D</th><th>L</th><th>PF</th><th>PA</th><th>PD</th><th>PTS</th></tr></thead>
         <tbody>${rows.map(b => rowHtml(b, buckets[b], false)).join('')}${rowHtml('Total', total, true)}</tbody>
@@ -861,6 +863,7 @@ function renderJerseyStats(){
 
   const toggle = document.getElementById('stats-toggle');
   const body = document.getElementById('stats-body');
+  toggle.classList.toggle('open', statsWasOpen);
   toggle.addEventListener('click', () => {
     const open = !body.hidden;
     body.hidden = open;
