@@ -213,7 +213,7 @@
 
   <div id="browse-filters" class="filters">
     <div class="multi-select" id="f-team-wrap">
-      <input type="text" class="combo-input" id="f-team-input" aria-label="Team" placeholder="Any team" autocomplete="off">
+      <input type="text" class="combo-input" id="f-team-input" aria-label="Team" placeholder="Search any team" autocomplete="off">
       <div class="multi-select-panel" id="f-team-panel" hidden></div>
     </div>
     <select id="f-status" aria-label="Show results, fixtures, or all">
@@ -444,6 +444,7 @@ function makeComboBox(wrapId, inputId, panelId){
   let value = '';
   let allowEmpty = true;
   let placeholder = '';
+  let clearLabel = '';
   let activeIdx = -1;
 
   function escAttr(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
@@ -451,7 +452,7 @@ function makeComboBox(wrapId, inputId, panelId){
   function visibleOptions(){
     const q = normalizeText(input.value);
     let list = q ? options.filter(o => normalizeText(o.label).includes(q)) : options;
-    if(!q && allowEmpty) list = [{value:'', label: placeholder}].concat(list);
+    if(!q && allowEmpty) list = [{value:'', label: clearLabel}].concat(list);
     return list;
   }
   function renderPanel(){
@@ -514,8 +515,8 @@ function makeComboBox(wrapId, inputId, panelId){
   // fTeam) or {allowEmpty:false} (no blank state - used for the h2h
   // Team A/B pickers, which always need a real team selected).
   target.setOptions = function(values, opts){
-    if(typeof opts === 'string'){ placeholder = opts; allowEmpty = true; }
-    else { placeholder = (opts && opts.placeholder) || ''; allowEmpty = !opts || opts.allowEmpty !== false; }
+    if(typeof opts === 'string'){ placeholder = opts; clearLabel = opts; allowEmpty = true; }
+    else { placeholder = (opts && opts.placeholder) || ''; clearLabel = (opts && opts.clearLabel) || placeholder; allowEmpty = !opts || opts.allowEmpty !== false; }
     options = values.map(v => ({value:String(v), label:String(v)}));
     input.placeholder = placeholder;
     if(!options.some(o => o.value === value)) value = allowEmpty ? '' : (options[0] ? options[0].value : '');
@@ -706,7 +707,7 @@ function facetPredicate(excludeKey){
 function populateFacets(){
   const teams = uniqueSorted(MATCHES, m => m.home).concat(uniqueSorted(MATCHES, m => m.away));
   const teamList = [...new Set(teams)].sort();
-  fillCombo(fTeam, teamList, 'Any team');
+  fillCombo(fTeam, teamList, {placeholder:'Search any team', clearLabel:'Any team'});
 
   fillSelect(fYear, uniqueSorted(MATCHES.filter(facetPredicate('year')), m => m.year, true), 'Any year');
   fillSelect(fLadderYear, uniqueSorted(MATCHES, m => m.year, true), 'All-time');
