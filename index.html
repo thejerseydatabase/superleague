@@ -54,11 +54,11 @@
 
   .filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:12px;}
   .h2h-row{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:center;margin-bottom:12px;}
-  .filters select, .h2h-row select, #f-h2h-year, .filters input{
+  .filters select, .h2h-row select, #f-h2h-year, .filters input, .combo-input{
     background:var(--surface);border:1px solid var(--line);color:var(--text);
     font-family:'Inter',sans-serif;font-size:13.5px;padding:10px 12px;border-radius:8px;outline:none;width:100%;
   }
-  .filters select:focus, .h2h-row select:focus, #f-h2h-year:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(232,184,75,0.15);}
+  .filters select:focus, .h2h-row select:focus, #f-h2h-year:focus, .combo-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(232,184,75,0.15);}
   .vs-sep{font-family:'Anton',sans-serif;color:var(--text-dim);font-size:16px;}
   /* Jersey filter: a checkbox dropdown instead of a plain select, so
      someone tracking (say) every Alternate a team's worn doesn't have to
@@ -77,7 +77,7 @@
     box-shadow:0 8px 24px rgba(0,0,0,0.25);
   }
   .multi-select-option{display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:6px;font-size:13px;cursor:pointer;}
-  .multi-select-option:hover{background:var(--surface-2);}
+  .multi-select-option:hover, .multi-select-option.active{background:var(--surface-2);}
   .multi-select-panel .multi-select-option input{accent-color:var(--accent);width:14px;min-width:14px;max-width:14px;height:14px;cursor:pointer;flex-shrink:0;}
   .multi-select-empty{padding:8px;font-size:12.5px;color:var(--text-dim2);}
   .multi-select-header{
@@ -136,6 +136,14 @@
   .ft-label{font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.08em;color:var(--text-dim2);text-transform:uppercase;margin:10px 0 0;}
   .meta-ticker{font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--text-dim);text-align:center;border-top:1px solid var(--line);margin-top:22px;padding-top:14px;letter-spacing:.02em;line-height:1.8;}
   .notes-line{margin:8px 0 0;font-style:italic;color:var(--text-dim2);font-size:12.5px;}
+
+  .matchup-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+  .matchup-nav-btn{background:var(--surface-2);border:1px solid var(--line);color:var(--text);width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:16px;padding:0;}
+  .matchup-nav-btn:hover:not(:disabled){border-color:var(--accent);color:var(--accent);}
+  .matchup-nav-btn:disabled{opacity:.35;cursor:default;}
+  .matchup-nav-pos{font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--text-dim2);letter-spacing:.04em;}
+  .team-name-link{background:none;border:none;font:inherit;color:inherit;cursor:pointer;display:block;width:100%;text-align:center;}
+  .team-name-link:hover{color:var(--accent);text-decoration:underline;}
 
   .list-wrap{border:1px solid var(--line);border-radius:12px;overflow:hidden;}
   .list-head, .row{display:grid;grid-template-columns:70px 96px 1fr 30px 12px 30px 1fr 96px 56px 34px;gap:6px;align-items:center;}
@@ -204,7 +212,10 @@
   </div>
 
   <div id="browse-filters" class="filters">
-    <select id="f-team" aria-label="Team"><option value="">Any team</option></select>
+    <div class="multi-select" id="f-team-wrap">
+      <input type="text" class="combo-input" id="f-team-input" aria-label="Team" placeholder="Any team" autocomplete="off">
+      <div class="multi-select-panel" id="f-team-panel" hidden></div>
+    </div>
     <select id="f-status" aria-label="Show results, fixtures, or all">
       <option value="results">Results</option>
       <option value="fixtures">Fixtures</option>
@@ -223,9 +234,15 @@
 
   <div id="h2h-filters" style="display:none;">
     <div class="h2h-row">
-      <select id="f-teamA" aria-label="Team A"></select>
+      <div class="multi-select" id="f-teamA-wrap">
+        <input type="text" class="combo-input" id="f-teamA-input" aria-label="Team A" autocomplete="off">
+        <div class="multi-select-panel" id="f-teamA-panel" hidden></div>
+      </div>
       <span class="vs-sep">VS</span>
-      <select id="f-teamB" aria-label="Team B"></select>
+      <div class="multi-select" id="f-teamB-wrap">
+        <input type="text" class="combo-input" id="f-teamB-input" aria-label="Team B" autocomplete="off">
+        <div class="multi-select-panel" id="f-teamB-panel" hidden></div>
+      </div>
     </div>
     <select id="f-h2h-year" aria-label="Year" style="margin-top:10px;width:100%;max-width:220px;"><option value="">All years</option></select>
   </div>
@@ -409,6 +426,105 @@ async function loadLiveData(){
   }
 }
 
+// A plain <select> works fine for round/theme/stadium/etc, but team lists
+// can run into the hundreds (international competitions) - scrolling a
+// native dropdown to find "Northern Ireland" after typing "N" lands on
+// whichever team happens to be first alphabetically under N, not the one
+// being searched for. This wraps a text input + filtered suggestion panel
+// behind the same .value / .addEventListener('change', ...) surface a
+// <select> has, so every bit of existing filtering code that reads
+// fTeam.value or listens for its 'change' event keeps working unchanged -
+// only the population call (fillSelect -> fillCombo) needed to change.
+function makeComboBox(wrapId, inputId, panelId){
+  const wrap = document.getElementById(wrapId);
+  const input = document.getElementById(inputId);
+  const panel = document.getElementById(panelId);
+  const target = new EventTarget();
+  let options = [];
+  let value = '';
+  let allowEmpty = true;
+  let placeholder = '';
+  let activeIdx = -1;
+
+  function escAttr(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function labelFor(v){ const m = options.find(o => o.value === v); return m ? m.label : ''; }
+  function visibleOptions(){
+    const q = normalizeText(input.value);
+    let list = q ? options.filter(o => normalizeText(o.label).includes(q)) : options;
+    if(!q && allowEmpty) list = [{value:'', label: placeholder}].concat(list);
+    return list;
+  }
+  function renderPanel(){
+    const vis = visibleOptions();
+    activeIdx = -1;
+    panel.innerHTML = vis.length
+      ? vis.map((o,i) => `<div class="multi-select-option" data-value="${escAttr(o.value)}" data-i="${i}" style="justify-content:flex-start;">${escAttr(o.label) || '&nbsp;'}</div>`).join('')
+      : `<div class="multi-select-empty">No matches</div>`;
+  }
+  function openPanel(){ renderPanel(); panel.hidden = false; }
+  function closePanel(){ panel.hidden = true; activeIdx = -1; }
+  function setActive(i){
+    const opts = [...panel.querySelectorAll('.multi-select-option')];
+    opts.forEach(o => o.classList.remove('active'));
+    activeIdx = i;
+    if(i > -1 && opts[i]){ opts[i].classList.add('active'); opts[i].scrollIntoView({block:'nearest'}); }
+  }
+  function choose(v){
+    value = options.some(o => o.value === v) ? v : '';
+    input.value = labelFor(value);
+    closePanel();
+    target.dispatchEvent(new Event('change'));
+  }
+
+  input.addEventListener('focus', openPanel);
+  input.addEventListener('input', openPanel);
+  input.addEventListener('keydown', e => {
+    if(panel.hidden){
+      if(e.key === 'ArrowDown' || e.key === 'ArrowUp'){ e.preventDefault(); openPanel(); }
+      return;
+    }
+    const opts = [...panel.querySelectorAll('.multi-select-option')];
+    if(e.key === 'ArrowDown'){ e.preventDefault(); setActive(Math.min(activeIdx+1, opts.length-1)); }
+    else if(e.key === 'ArrowUp'){ e.preventDefault(); setActive(Math.max(activeIdx-1, 0)); }
+    else if(e.key === 'Enter'){ e.preventDefault(); if(activeIdx > -1 && opts[activeIdx]) choose(opts[activeIdx].dataset.value); }
+    else if(e.key === 'Escape'){ input.value = labelFor(value); closePanel(); }
+  });
+  panel.addEventListener('mousedown', e => {
+    const opt = e.target.closest('.multi-select-option');
+    if(!opt) return;
+    e.preventDefault(); // keeps the input focused so this fires instead of a blur closing the panel first
+    choose(opt.dataset.value);
+  });
+  input.addEventListener('blur', () => {
+    setTimeout(() => { input.value = labelFor(value); closePanel(); }, 120);
+  });
+  document.addEventListener('click', e => {
+    if(!panel.hidden && !wrap.contains(e.target)) closePanel();
+  });
+
+  Object.defineProperty(target, 'value', {
+    get(){ return value; },
+    set(v){
+      value = options.some(o => o.value === v) ? v : '';
+      input.value = labelFor(value);
+    }
+  });
+  // values: plain array of strings, same shape fillSelect takes. opts is
+  // either the placeholder string (an "Any ..." row is offered, as with
+  // fTeam) or {allowEmpty:false} (no blank state - used for the h2h
+  // Team A/B pickers, which always need a real team selected).
+  target.setOptions = function(values, opts){
+    if(typeof opts === 'string'){ placeholder = opts; allowEmpty = true; }
+    else { placeholder = (opts && opts.placeholder) || ''; allowEmpty = !opts || opts.allowEmpty !== false; }
+    options = values.map(v => ({value:String(v), label:String(v)}));
+    input.placeholder = placeholder;
+    if(!options.some(o => o.value === value)) value = allowEmpty ? '' : (options[0] ? options[0].value : '');
+    input.value = labelFor(value);
+  };
+  return target;
+}
+function fillCombo(combo, values, placeholderOrOpts){ combo.setOptions(values, placeholderOrOpts); }
+
 // ---------- DOM refs ----------
 const listEl = document.getElementById('list');
 const matchupEl = document.getElementById('matchup');
@@ -417,7 +533,7 @@ const modeBrowseBtn = document.getElementById('mode-browse');
 const modeH2hBtn = document.getElementById('mode-h2h');
 const browseFiltersEl = document.getElementById('browse-filters');
 const h2hFiltersEl = document.getElementById('h2h-filters');
-const fTeam = document.getElementById('f-team');
+const fTeam = makeComboBox('f-team-wrap', 'f-team-input', 'f-team-panel');
 const fStatus = document.getElementById('f-status');
 const fYear = document.getElementById('f-year');
 const fJerseyBtn = document.getElementById('f-jersey-btn');
@@ -430,8 +546,8 @@ const fRound = document.getElementById('f-round');
 const fTheme = document.getElementById('f-theme');
 const fStadium = document.getElementById('f-stadium');
 const fRef = document.getElementById('f-ref');
-const fTeamA = document.getElementById('f-teamA');
-const fTeamB = document.getElementById('f-teamB');
+const fTeamA = makeComboBox('f-teamA-wrap', 'f-teamA-input', 'f-teamA-panel');
+const fTeamB = makeComboBox('f-teamB-wrap', 'f-teamB-input', 'f-teamB-panel');
 const fH2hYear = document.getElementById('f-h2h-year');
 const clearBtn = document.getElementById('clear-filters');
 const ladderToggle = document.getElementById('ladder-toggle');
@@ -590,7 +706,7 @@ function facetPredicate(excludeKey){
 function populateFacets(){
   const teams = uniqueSorted(MATCHES, m => m.home).concat(uniqueSorted(MATCHES, m => m.away));
   const teamList = [...new Set(teams)].sort();
-  fillSelect(fTeam, teamList, 'Any team');
+  fillCombo(fTeam, teamList, 'Any team');
 
   fillSelect(fYear, uniqueSorted(MATCHES.filter(facetPredicate('year')), m => m.year, true), 'Any year');
   fillSelect(fLadderYear, uniqueSorted(MATCHES, m => m.year, true), 'All-time');
@@ -612,11 +728,8 @@ function populateFacets(){
   const refs = [...new Set(refScope.map(m => m.referee).filter(Boolean))].sort();
   fillSelect(fRef, refs, 'Any referee');
 
-  const curA = fTeamA.value, curB = fTeamB.value;
-  fTeamA.innerHTML = teamList.map(t => `<option value="${t}">${t}</option>`).join('');
-  fTeamB.innerHTML = teamList.map(t => `<option value="${t}">${t}</option>`).join('');
-  if(teamList.includes(curA)) fTeamA.value = curA;
-  if(teamList.includes(curB)) fTeamB.value = curB;
+  fillCombo(fTeamA, teamList, {allowEmpty:false});
+  fillCombo(fTeamB, teamList, {allowEmpty:false});
 
   // Its own year filter, defaulting to "All years" — separate from Browse
   // mode's f-year (which defaults to the latest season) so switching to
@@ -708,6 +821,7 @@ fStatus.addEventListener('change', applyFilters);
 // ---------- rendering ----------
 function jerseySlot(team, jersey, img){
   const hasImg = !!img;
+  const teamAttr = String(team).replace(/&/g,'&amp;').replace(/"/g,'&quot;');
   return `
     <div class="jersey-slot">
       <div class="jersey-photo ${hasImg ? 'has-image' : 'empty'}">
@@ -716,9 +830,31 @@ function jerseySlot(team, jersey, img){
           : `<i class="ti ti-shirt-sport"></i>`}
       </div>
       <p class="no-photo-label">${hasImg ? '' : 'no jersey photo yet'}</p>
-      <p class="team-name">${team}</p>
+      <button type="button" class="team-name team-name-link" data-team-link="${teamAttr}" title="See all ${team} results">${team}</button>
       <p class="jersey-tag">${jersey ? jersey + ' jersey' : 'jersey unknown'}</p>
     </div>`;
+}
+
+// Jumps the matchup card (and the highlighted list row) to another index
+// within the current filtered results - shared by the list row click, the
+// prev/next buttons, and the left/right arrow keys, so all three stay in
+// sync with the exact same clamping/scroll behaviour.
+function goToIndex(i){
+  if(!filtered.length) return;
+  activeIndex = Math.max(0, Math.min(i, filtered.length - 1));
+  renderMatchup(filtered[activeIndex]);
+  renderList();
+  matchupEl.scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+// Clicking a team's name in the matchup card jumps to Browse mode filtered
+// to just that team.
+function filterByTeam(team){
+  if(mode !== 'browse') setMode('browse');
+  fTeam.value = team;
+  populateFacets();
+  applyFilters();
+  document.querySelector('.list-wrap').scrollIntoView({behavior:'smooth', block:'start'});
 }
 
 function renderMatchup(m){
@@ -734,7 +870,14 @@ function renderMatchup(m){
   const metaParts = [roundLabel, m.theme, m.stadium, fmtDate(m.date), m.referee ? 'Ref: ' + m.referee : null].filter(Boolean);
   const notesLine = m.notes ? `<p class="notes-line">${m.notes}</p>` : '';
 
+  const canPrev = activeIndex > 0;
+  const canNext = activeIndex < filtered.length - 1;
   matchupEl.innerHTML = `
+    <div class="matchup-nav">
+      <button type="button" class="matchup-nav-btn" id="matchup-prev" ${canPrev ? '' : 'disabled'} aria-label="Previous match"><i class="ti ti-chevron-left"></i></button>
+      <span class="matchup-nav-pos">${filtered.length ? (activeIndex+1) + ' of ' + filtered.length : ''}</span>
+      <button type="button" class="matchup-nav-btn" id="matchup-next" ${canNext ? '' : 'disabled'} aria-label="Next match"><i class="ti ti-chevron-right"></i></button>
+    </div>
     <div class="matchup-grid">
       ${jerseySlot(m.home, m.homeJersey, m.homeImg)}
       <div class="score-block">${scoreHtml}</div>
@@ -742,6 +885,11 @@ function renderMatchup(m){
     </div>
     <div class="meta-ticker">${metaParts.join(' \u2022 ')}${notesLine}</div>
   `;
+  if(canPrev) document.getElementById('matchup-prev').addEventListener('click', () => goToIndex(activeIndex - 1));
+  if(canNext) document.getElementById('matchup-next').addEventListener('click', () => goToIndex(activeIndex + 1));
+  matchupEl.querySelectorAll('[data-team-link]').forEach(el => {
+    el.addEventListener('click', () => filterByTeam(el.dataset.teamLink));
+  });
 }
 
 function renderList(){
@@ -770,12 +918,7 @@ function renderList(){
   }).join('');
 
   listEl.querySelectorAll('.row').forEach(row => {
-    row.addEventListener('click', () => {
-      activeIndex = parseInt(row.dataset.i);
-      renderMatchup(filtered[activeIndex]);
-      renderList();
-      matchupEl.scrollIntoView({behavior:'smooth', block:'start'});
-    });
+    row.addEventListener('click', () => goToIndex(parseInt(row.dataset.i)));
   });
 }
 
@@ -899,6 +1042,18 @@ ladderToggle.addEventListener('click', () => {
   ladderToggle.classList.toggle('open', !open);
 });
 fLadderYear.addEventListener('change', renderJerseyLadder);
+
+// Left/right arrow keys step through the current match list, same as the
+// prev/next buttons - skipped while typing in a filter so it doesn't
+// hijack text-cursor movement in the team search box.
+document.addEventListener('keydown', e => {
+  if(e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+  const t = e.target;
+  if(t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+  if(e.metaKey || e.ctrlKey || e.altKey || !filtered.length) return;
+  e.preventDefault();
+  goToIndex(activeIndex + (e.key === 'ArrowRight' ? 1 : -1));
+});
 
 // ---------- init ----------
 populateFacets();
