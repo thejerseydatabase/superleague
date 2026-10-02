@@ -157,6 +157,7 @@
   .jcode{font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:600;color:var(--text-dim);background:var(--surface-2);border:1px solid var(--line);border-radius:4px;padding:3px 4px;text-align:center;cursor:help;white-space:normal;word-break:break-word;line-height:1.25;align-self:stretch;display:flex;align-items:center;justify-content:center;}
   .row .c-home{text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500;}
   .row .c-away{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500;}
+  .row .is-selected-team{font-weight:800;}
   .result-win{color:var(--win);}
   .result-loss{color:var(--loss);}
   .result-draw{color:var(--draw);}
@@ -898,20 +899,27 @@ function renderList(){
     listEl.innerHTML = `<div class="no-results">No matches found. Try loosening a filter.</div>`;
     return;
   }
+  // Bolds whichever side matches the currently selected Team filter, so
+  // the team you picked stays easy to pick out of the list whether it
+  // won, lost, or drew - the result colour alone doesn't tell you which
+  // row is "yours".
+  const selectedTeam = mode === 'browse' ? fTeam.value : null;
   listEl.innerHTML = filtered.map((m, i) => {
     const played = isPlayed(m);
     const hr = played ? resultFor(m,'home') : null;
     const ar = played ? resultFor(m,'away') : null;
     const roundShort = m.round ? (isNaN(m.round) ? m.round : 'R' + m.round) : '';
+    const homeSelected = selectedTeam && m.home === selectedTeam;
+    const awaySelected = selectedTeam && m.away === selectedTeam;
     return `
       <div class="row ${i===activeIndex?'active':''}" data-i="${i}" tabindex="0">
         <span class="c-date">${fmtDate(m.date, true)}</span>
         <span class="jcode c-hjersey" title="${m.homeJersey || 'Unknown'} jersey"><span class="jname-full">${jerseyCode(m.homeJersey)}</span><span class="jname-short">${jerseyAbbrev(m.homeJersey)}</span></span>
-        <span class="c-home ${resultClass(hr)}">${m.home}</span>
+        <span class="c-home ${resultClass(hr)}${homeSelected ? ' is-selected-team' : ''}">${m.home}</span>
         <span class="c-hs">${played ? m.homeScore : ''}</span>
         <span class="c-dash">&ndash;</span>
         <span class="c-as">${played ? m.awayScore : ''}</span>
-        <span class="c-away ${resultClass(ar)}">${m.away}</span>
+        <span class="c-away ${resultClass(ar)}${awaySelected ? ' is-selected-team' : ''}">${m.away}</span>
         <span class="jcode c-ajersey" title="${m.awayJersey || 'Unknown'} jersey"><span class="jname-full">${jerseyCode(m.awayJersey)}</span><span class="jname-short">${jerseyAbbrev(m.awayJersey)}</span></span>
         <span class="c-round">${roundShort}</span>
         <span class="c-photos"><span class="photo-dot ${m.homeImg?'filled':''}"></span><span class="photo-dot ${m.awayImg?'filled':''}"></span></span>
