@@ -47,6 +47,7 @@
   .hero h1{position:relative;font-family:'Anton',sans-serif;font-weight:400;font-size:clamp(32px,6vw,54px);letter-spacing:.01em;text-transform:uppercase;line-height:1.02;margin:0 0 14px;}
   .stat-line{position:relative;font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--text-dim);margin:0;}
   .stat-line b{color:var(--text);font-weight:600;}
+  .stat-label{color:var(--text-dim2);font-size:11px;text-transform:uppercase;letter-spacing:.07em;margin-right:3px;}
 
   .mode-toggle{display:flex;gap:8px;margin-bottom:16px;}
   .mode-toggle button{flex:1;padding:11px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--text);font-family:'Inter',sans-serif;font-size:13.5px;font-weight:500;cursor:pointer;}
@@ -127,7 +128,7 @@
   .jersey-tag{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.05em;margin:0;}
   .score-block{text-align:center;padding:0 6px;}
   .score-tiles{display:flex;align-items:center;gap:8px;justify-content:center;}
-  .tile{background:#0D1F16;border:1px solid var(--line);border-radius:8px;width:44px;height:56px;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:24px;color:var(--accent);box-shadow:inset 0 2px 4px rgba(0,0,0,0.4);}
+  .tile{background:#0D1F16;border:1px solid var(--line);border-radius:8px;min-width:44px;height:56px;padding:0 8px;box-sizing:border-box;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:24px;color:var(--accent);box-shadow:inset 0 2px 4px rgba(0,0,0,0.4);}
   .tile.win{color:var(--win);border-color:rgba(95,184,138,0.4);}
   .tile.loss{color:var(--loss);border-color:rgba(217,112,92,0.4);}
   .tile.draw{color:var(--draw);border-color:rgba(232,194,90,0.4);}
@@ -203,7 +204,8 @@
     <div class="hero-circle"></div>
     <p class="eyebrow">Super League Jersey Tracker</p>
     <h1>Every jersey.<br>Every era.</h1>
-    <p class="stat-line"><b id="total-count">0</b> fixtures &middot; <b id="year-range"></b> &middot; <b id="played-count">0</b> played &middot; <b id="tracked-count">0</b> results logged (<b id="tracked-pct">0</b>%) &middot; <b id="kit-count">0</b> with a photo (<b id="photo-pct">0</b>%)</p>
+    <p class="stat-line" id="alltime-stat-line" hidden><span class="stat-label">All-time</span> <b id="total-count-all">0</b> fixtures &middot; <b id="year-range-all"></b> &middot; <b id="played-count-all">0</b> played &middot; <b id="tracked-count-all">0</b> results logged (<b id="tracked-pct-all">0</b>%) &middot; <b id="kit-count-all">0</b> with a photo (<b id="photo-pct-all">0</b>%)</p>
+    <p class="stat-line" style="margin-top:4px;"><span class="stat-label" id="stat-label-current" hidden>Currently showing</span> <b id="total-count">0</b> fixtures &middot; <b id="year-range"></b> &middot; <b id="played-count">0</b> played &middot; <b id="tracked-count">0</b> results logged (<b id="tracked-pct">0</b>%) &middot; <b id="kit-count">0</b> with a photo (<b id="photo-pct">0</b>%)</p>
     <p class="stat-line" id="data-status" style="margin-top:6px;">Loading data&hellip;</p>
   </header>
 
@@ -806,12 +808,28 @@ function populateFacets(){
   renderJerseyLadder();
 }
 
+// Only shown once a tracker has more than one distinct year of data - until
+// then "all-time" and "currently showing" are the same thing, so a second
+// line would just be a redundant duplicate of the first.
+function renderAllTimeLine(){
+  const s = computeStats(MATCHES);
+  document.getElementById('total-count-all').textContent = s.total;
+  document.getElementById('played-count-all').textContent = s.occurred;
+  document.getElementById('tracked-count-all').textContent = s.tracked;
+  document.getElementById('tracked-pct-all').textContent = s.trackedPct;
+  document.getElementById('kit-count-all').textContent = s.withPhoto;
+  document.getElementById('photo-pct-all').textContent = s.photoPct;
+  const years = [...new Set(MATCHES.map(m => m.year).filter(Boolean))];
+  const multiYear = years.length > 1;
+  const rangeEl = document.getElementById('year-range-all');
+  if(rangeEl && years.length) rangeEl.textContent = Math.min(...years) + '\u2013' + Math.max(...years);
+  document.getElementById('alltime-stat-line').hidden = !multiYear;
+  const labelEl = document.getElementById('stat-label-current');
+  if(labelEl) labelEl.hidden = !multiYear;
+}
+
 function updateStatLine(){
-
-
-  renderStats(MATCHES);
-  const years = MATCHES.map(m => m.year).filter(Boolean);
-  if(years.length) document.getElementById('year-range').textContent = Math.min(...years) + '\u2013' + Math.max(...years);
+  renderAllTimeLine();
 }
 
 // ---------- filtering ----------
