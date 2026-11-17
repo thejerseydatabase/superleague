@@ -740,15 +740,27 @@ function jerseyCode(j){
   return j || 'Unknown';
 }
 
-// Compact form for the results list on narrow screens: an already-short acronym stays
-// as-is, a single word is clipped to 3 letters, and multiple words become initials
-// (Women in League -> WIL) so it stays recognisable without needing the full name's width.
+// Compact form for the results list on narrow screens, capped at 1-2
+// letters (the full name is still on the "title" tooltip and the wide-
+// screen jname-full span - this is purely the cramped-mobile view).
+// The common ones get an explicit short code rather than a generic
+// initial, since "Alternate" and "Away" would otherwise collide on
+// "A" - everything else (one-off named kits like "Vegas", "Alternate
+// LCD") falls through to a 2-letter generic abbreviation.
+const JERSEY_ABBREV_PREFIXES = [
+  [/^home/i, 'H'], [/^away/i, 'A'], [/^alt/i, 'AL'], [/^third/i, 'T'],
+  [/^heritage/i, 'HR'], [/^training/i, 'TR'], [/^anzac/i, 'AN'],
+  [/^indigenous/i, 'IN'], [/^nines/i, 'N'], [/^charity/i, 'CH'],
+  [/^testimonial/i, 'TS'], [/^commemorative/i, 'CM']
+];
 function jerseyAbbrev(j){
-  if(!j) return 'UNK';
-  if(/^[A-Z0-9]+$/.test(j) && j.length <= 6) return j;
-  const words = j.trim().split(/\s+/);
-  if(words.length === 1) return words[0].slice(0,3).toUpperCase();
-  return words.map(w => w[0]).join('').toUpperCase().slice(0,4);
+  if(!j) return 'U';
+  const t = j.trim();
+  const hit = JERSEY_ABBREV_PREFIXES.find(([re]) => re.test(t));
+  if(hit) return hit[1];
+  const words = t.split(/\s+/);
+  if(words.length === 1) return words[0].slice(0,2).toUpperCase();
+  return words.map(w => w[0]).join('').toUpperCase().slice(0,2);
 }
 
 // ---------- populate dropdowns from whatever's actually in the data ----------
